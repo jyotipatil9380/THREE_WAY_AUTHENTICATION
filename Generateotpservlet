@@ -1,44 +1,87 @@
-package com.threeway;
 
-import java.sql.*;
-import java.io.IOException;
+package com.threeway;
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.io.IOException;
+import java.util.Random;
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-public class login extends HttpServlet {
-    
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+
+public class GenerateOTPServlet extends HttpServlet {
+
+
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
+        String mobileNumber = request.getParameter("mobileNumber");
+        String otp = generateOTP();
+       
         
-        String uemail = request.getParameter("username");
-        String upassword = request.getParameter("password");
-        HttpSession session = request.getSession();
-        RequestDispatcher dispatcher = null;
-        Connection con;
-        try {
-            Class.forName("com.mysql.jdbc.Driver");
-            con =  DriverManager.getConnection("jdbc:mysql://localhost:3306/login?useSSL=false", "root", "1234");
-            PreparedStatement pst = con.prepareStatement("select * from users2 where uemail=? and upassword= ?");
-            pst.setString(1, uemail);
-            pst.setString(2, upassword);
-            ResultSet rs = pst.executeQuery();
-            if (rs.next()) {
-             session.setAttribute("name", rs.getString("uname"));
-               dispatcher = request.getRequestDispatcher("generate.jsp");
-            } else {
-               request.setAttribute("status", "failed");
-              dispatcher = request.getRequestDispatcher("login.jsp");
-            }
+        // Save the OTP to the database
+        saveOTPToDatabase(mobileNumber, otp);
+          sendOTPviaSMS(mobileNumber, otp);
+      //  System.out.println("success");
+      RequestDispatcher dispatcher = request.getRequestDispatcher("verify.jsp");
+
+    // Forward the request to verify.jsp
+    dispatcher.forward(request, response);
+    }
+    
+    private String generateOTP() {
+        // Generate a random 6-digit OTP
+        Random random = new Random();
+        int otpNumber = 100000 + random.nextInt(900000);
+        return String.valueOf(otpNumber);
+    }
+    
+    private void saveOTPToDatabase(String mobileNumber, String otp) {
+        String jdbcUrl = "jdbc:mysql://localhost:3306/login";
+        String username = "root";
+        String password = "1234";
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password)) {
+            String sql = "INSERT INTO otp_table3(mobile_number, otp) VALUES (?,?)";
+            PreparedStatement statement = conn.prepareStatement(sql);
+             
+            statement.setString(1, mobileNumber);
+            statement.setString(2, otp);
+           
+            statement.executeUpdate();
           
-            dispatcher.forward(request, response);
-        } catch (IOException | ClassNotFoundException | SQLException | ServletException e) {
+           
+            
+        } catch (Exception  e) {
             e.printStackTrace();
         }
     }
-    
+  private void sendOTPviaSMS(String mobileNumber, String otp) {
+        String apiKey = "d0bf42cd-249e-11ee-addf-0200cd936042";
+        //String apiSecret = "YOUR_API_SECRET";
+        String smsGatewayUrl = "https://2factor.in/API/V1/" + apiKey + "/SMS/" + mobileNumber + "/" + otp;
+
+        try {
+            String message = "Your OTP is: " + otp;
+            String encodedMessage = URLEncoder.encode(message, "UTF-8");
+            String requestUrl = smsGatewayUrl + "?apiKey=d0bf42cd-249e-11ee-addf-0200cd936042" + apiKey  + "&to=" + mobileNumber + "&message=the one time otp is:" + encodedMessage;
+
+            URL url = new URL(requestUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+
+            int responseCode = connection.getResponseCode();
+            // Handle the response code and any error scenarios
+
+            connection.disconnect();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
+
