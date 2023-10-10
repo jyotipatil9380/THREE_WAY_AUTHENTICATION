@@ -1,0 +1,73 @@
+package com.threeway;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+public class VerifyOTPServlet extends HttpServlet {
+
+    // JDBC database URL, username, and password
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/login";
+    private static final String DB_USER = "root";
+    private static final String DB_PASSWORD = "1234";
+
+    // OTP expiration time in milliseconds (e.g., 5 minutes)
+    private static final long OTP_EXPIRATION_TIME = 5 * 60 * 1000;
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        String enteredOTP = request.getParameter("otp");
+
+        if (verifyOTP(enteredOTP)) {
+            // OTP is valid
+// response.getWriter().println("valid OTP.");
+request.setAttribute("message", "OTP is valid");
+                    request.setAttribute("type", "success");
+                    //response.sendRedirect("NextServlet"); 
+        } else {
+            // OTP is invalid or expired
+          // response.getWriter().println("Invalid OTP.");
+          request.setAttribute("message", "Invalid OTP");
+                    request.setAttribute("type", "error");
+        
+        }
+                request.getRequestDispatcher("verify.jsp").forward(request, response);
+
+    }
+
+    private boolean verifyOTP(String enteredOTP) {
+        try {
+            // Create a database connection
+            Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+
+            // Prepare a SQL query to check if the OTP is valid and not expired
+            String query = "SELECT * FROM otp_table3 WHERE otp = ? AND is_valid = true AND(expiration_time IS NULL OR expiration_time > ?)";
+            PreparedStatement statement = conn.prepareStatement(query);
+            statement.setString(1, enteredOTP);
+            statement.setTimestamp(2, new Timestamp(System.currentTimeMillis() - OTP_EXPIRATION_TIME));
+
+            // Execute the query
+            ResultSet resultSet = statement.executeQuery();
+
+            // Check if the OTP exists and is valid
+            boolean isValidOTP = resultSet.next();
+
+            // Close the database connections
+            resultSet.close();
+            statement.close();
+            conn.close();
+
+            return isValidOTP;
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+}
